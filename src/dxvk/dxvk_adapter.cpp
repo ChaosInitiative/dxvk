@@ -366,6 +366,8 @@ namespace dxvk {
       &devExtensions.khrSwapchain,
       &devExtensions.nvxBinaryImport,
       &devExtensions.nvxImageViewHandle,
+      &devExtensions.googleHlslFunctionality,
+      &devExtensions.googleUserType
     }};
 
     // Only enable Cuda interop extensions in 64-bit builds in
