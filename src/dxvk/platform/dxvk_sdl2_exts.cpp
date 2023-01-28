@@ -36,7 +36,8 @@ namespace dxvk {
   
 
   void DxvkPlatformExts::initInstanceExtensions() {
-
+    if (SDL_Vulkan_LoadLibrary(nullptr) != 0)
+      throw DxvkError(str::format("SDL2 WSI: Failed to load vulkan library. ", SDL_GetError()));
   }
 
 
