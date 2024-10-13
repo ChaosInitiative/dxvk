@@ -2870,23 +2870,13 @@ namespace dxvk {
       std::vector<SpvReflectInterfaceVariable*> variables(variableCount);
       mod.EnumerateInputVariables(&variableCount, variables.data());
 
-      auto compareSemanticNames = [](const std::string& a, const std::string& b) {
-          if (a.size() != b.size())
-            return false;
-          for (size_t i = 0; i < a.size(); i++) {
-            if (std::toupper(a[i]) != std::toupper(b[i]))
-              return false;
-          }
-          return true;
-      };
-
-      auto findEntry = [&variables, compareSemanticNames](const std::string& name, UINT idx) -> uint64_t {
-          const auto fullName = str::format(name, idx);
-          for (auto var : variables) {
+      auto findEntry = [&variables](const std::string& name, UINT idx) -> uint64_t {
+          const std::string fullName = str::format(name, idx);
+          for (SpvReflectInterfaceVariable *var : variables) {
             if (unlikely(!var->semantic))
               continue;
             std::string semantic = var->semantic;
-            if (compareSemanticNames(semantic, fullName) || (idx == 0 && compareSemanticNames(semantic, name)))
+            if (DxbcIsgn::compareSemanticNames(semantic, fullName) || (idx == 0 && DxbcIsgn::compareSemanticNames(semantic, name)))
               return var->location;
           }
           return UINT64_MAX;
@@ -2894,12 +2884,13 @@ namespace dxvk {
 
       uint32_t attrMask = 0;
       uint32_t bindMask = 0;
+      uint32_t bindingsDefined = 0;
 
       std::array<DxvkVertexAttribute, D3D11_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT> attrList{};
       std::array<DxvkVertexBinding,   D3D11_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT> bindList{};
 
       for (uint32_t i = 0; i < NumElements; i++) {
-        auto registerId = findEntry(
+        uint64_t registerId = findEntry(
                 pInputElementDescs[i].SemanticName,
                 pInputElementDescs[i].SemanticIndex);
 
@@ -2948,28 +2939,20 @@ namespace dxvk {
         binding.fetchRate = pInputElementDescs[i].InstanceDataStepRate;
         binding.inputRate = pInputElementDescs[i].InputSlotClass == D3D11_INPUT_PER_INSTANCE_DATA
                             ? VK_VERTEX_INPUT_RATE_INSTANCE : VK_VERTEX_INPUT_RATE_VERTEX;
+        binding.extent    = registerId != UINT64_MAX ? uint32_t(attrib.offset + formatInfo->elementSize) : 0u;
 
         // Check if the binding was already defined. If so, the
         // parameters must be identical (namely, the input rate).
-        bool bindingDefined = false;
+        if (bindingsDefined & (1u << binding.binding)) {
+          if (bindList.at(binding.binding).inputRate != binding.inputRate)
+            return E_INVALIDARG;
 
-        for (uint32_t j = 0; j < i; j++) {
-          uint32_t bindingId = attrList.at(j).binding;
-
-          if (binding.binding == bindingId) {
-            bindingDefined = true;
-
-            if (binding.inputRate != bindList.at(bindingId).inputRate) {
-              Logger::err(str::format(
-                      "D3D11Device: Conflicting input rate for binding ",
-                      binding.binding));
-              return E_INVALIDARG;
-            }
-          }
-        }
-
-        if (!bindingDefined)
+          bindList.at(binding.binding).extent = std::max(
+            bindList.at(binding.binding).extent, binding.extent);
+        } else {
           bindList.at(binding.binding) = binding;
+          bindingsDefined |= 1u << binding.binding;
+        }
 
         if (registerId != UINT64_MAX) {
           attrMask |= 1u << i;
