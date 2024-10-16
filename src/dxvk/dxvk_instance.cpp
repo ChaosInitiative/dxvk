@@ -61,6 +61,16 @@ namespace dxvk {
           provider->getDeviceExtensions(i));
       }
     }
+
+    auto env = env::getEnvVar("DXVK_DEVICE_EXTENSIONS");
+    DxvkNameSet ns;
+    for (auto* s = strtok(env.data(), ":"); s; s = strtok(nullptr, ":")) {
+      ns.add(s);
+    }
+
+    for (auto& adapter : m_adapters) {
+      adapter->enableExtensions(ns);
+    }
   }
   
   
@@ -164,6 +174,11 @@ namespace dxvk {
 
       for (const auto& provider : m_extProviders)
         extensionSet.merge(provider->getInstanceExtensions());
+
+      auto env = env::getEnvVar("DXVK_INSTANCE_EXTENSIONS");
+      for (auto* s = strtok(env.data(), ":"); s; s = strtok(nullptr, ":")) {
+        extensionSet.add(s);
+      }
 
       // Generate list of extensions to enable
       extensionList = extensionSet.toNameList();
